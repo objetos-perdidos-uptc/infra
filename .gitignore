@@ -16,7 +16,10 @@
 
 # Ignorar los repos clonados por los scripts
 eureka-server/
-api-gateway-lostobjects/
-auth-service-lostobjects/
+api-gateway/
+auth-service/
 claim-service/
 frontend/
+matching-service/
+notification-service/
+report-service/

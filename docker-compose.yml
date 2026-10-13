@@ -145,6 +145,51 @@ services:
       - lost-network
     restart: on-failure
 
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service
+    ports:
+      - "8084:8084"
+    environment:
+      APP_NAME: notification-service
+      PORT: 8084
+      HOST_NAME: notification-service
+      IP_ADDR: notification-service
+      EUREKA_URL: http://eureka-server:8761/eureka
+      MONGO_URL: mongodb://mongodb:27017
+      MONGO_DB: notifications_db
+    depends_on:
+      - mongodb
+      - eureka-server
+    networks:
+      - lost-network
+    restart: on-failure
+
+  matching-service:
+    build: ./matching-service
+    container_name: matching-service
+    ports:
+      - "8083:8083"
+    environment:
+      APP_NAME: matching-service
+      PORT: 8083
+      HOST_NAME: matching-service
+      IP_ADDR: matching-service
+      EUREKA_URL: http://eureka-server:8761/eureka
+      REDIS_URL: redis://redis:6379/0
+      REPORT_SERVICE: report-service
+      NOTIFICATION_SERVICE: notification-service
+      USE_FAKE_DATA: "false"
+      HIGH_MATCH_THRESHOLD: "80.0"
+    depends_on:
+      - redis
+      - eureka-server
+      - report-service
+      - notification-service
+    networks:
+      - lost-network
+    restart: on-failure
+
 networks:
   lost-network:
     driver: bridge
