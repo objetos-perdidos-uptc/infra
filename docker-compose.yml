@@ -1,0 +1,118 @@
+services:
+
+  # ============================================
+  # BASES DE DATOS
+  # ============================================
+
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: postgres-lost
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - lost-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:6
+    container_name: mongodb-lost
+    ports:
+      - "${MONGO_PORT}:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - lost-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-lost
+    ports:
+      - "${REDIS_PORT}:6379"
+    networks:
+      - lost-network
+
+  # ============================================
+  # INFRAESTRUCTURA
+  # ============================================
+
+  eureka-server:
+    build: ./eureka-server
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    networks:
+      - lost-network
+    restart: on-failure
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      EUREKA_URL: http://eureka-server:8761/eureka/
+    depends_on:
+      - eureka-server
+    networks:
+      - lost-network
+    restart: on-failure
+
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      EUREKA_URL: http://eureka-server:8761/eureka/
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    networks:
+      - lost-network
+    restart: on-failure
+
+  claim-service:
+    build: ./claim-service
+    container_name: claim-service
+    ports:
+      - "8085:8085"
+    environment:
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      EUREKA_URL: http://eureka-server:8761/eureka/
+    depends_on:
+      - mongodb
+      - redis
+      - eureka-server
+    networks:
+      - lost-network
+    restart: on-failure
+
+networks:
+  lost-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  mongo_data:
