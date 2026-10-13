@@ -4,7 +4,7 @@ echo   Actualizando codigo desde los repos...
 echo ============================================
 echo.
 
-for %%R in (eureka-server api-gateway-lostobjects auth-service-lostobjects claim-service) do (
+for %%R in (eureka-server api-gateway-lostobjects auth-service-lostobjects claim-service report-service) do (
     if exist "%%R" (
         echo Actualizando %%R...
         pushd "%%R"

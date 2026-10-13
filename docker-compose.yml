@@ -68,6 +68,11 @@ services:
       - lost-network
     restart: on-failure
 
+  # ============================================
+  # MICROSERVICIOS
+  # ============================================
+
+
   auth-service:
     build: ./auth-service
     container_name: auth-service
@@ -109,6 +114,37 @@ services:
       - lost-network
     restart: on-failure
 
+  report-service:
+    build: ./report-service
+    container_name: report-service
+    ports:
+      - "8082:8082"
+    environment:
+      PORT: 8082
+      HOST_NAME: report-service
+      IP_ADDR: report-service
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: reports_db
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      UPLOAD_DIR: uploads
+      MAX_PHOTOS: 5
+      MAX_PHOTO_MB: 5
+      EXPIRATION_DAYS: 30
+      REMINDER_DAYS: 3
+    volumes:
+      - report_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    networks:
+      - lost-network
+    restart: on-failure
+
 networks:
   lost-network:
     driver: bridge
@@ -116,3 +152,4 @@ networks:
 volumes:
   postgres_data:
   mongo_data:
+  report_uploads:

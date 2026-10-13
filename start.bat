@@ -43,6 +43,14 @@ if not exist "claim-service" (
     echo claim-service ya existe, saltando.
 )
 
+if not exist "report-service" (
+    echo Clonando report-service...
+    git clone https://github.com/objetos-perdidos-uptc/report-service.git
+) else (
+    echo report-service ya existe, saltando.
+)
+
+
 echo.
 echo [2/3] Verificando archivo .env...
 
@@ -67,6 +75,7 @@ echo   - Eureka:        http://localhost:8761
 echo   - API Gateway:   http://localhost:8080
 echo   - Auth Service:  http://localhost:8081
 echo   - Claim Service: http://localhost:8085
+echo   - Report Service: http://localhost:8082
 echo.
 echo   Para ver logs:  docker-compose logs -f
 echo   Para detener:   stop.bat
