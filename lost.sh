@@ -66,7 +66,6 @@ ensure_env() {
   done
   (( ${#missing[@]} == 0 )) || fail "Faltan variables en .env: ${missing[*]}"
 
-  (( ${#$(get_var JWT_SECRET)} >= 32 )) 2>/dev/null || true
   local jwt; jwt="$(get_var JWT_SECRET)"
   (( ${#jwt} >= 32 )) || fail "JWT_SECRET debe tener al menos 32 caracteres (tiene ${#jwt})."
 
