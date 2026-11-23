@@ -12,7 +12,7 @@ clona los repos, valida la configuración y levanta los contenedores.
 ## Inicio rápido
 
 ```bash
-git clone https://github.com/objetos-perdidos-uptc/<este-repo>.git infra
+git clone https://github.com/objetos-perdidos-uptc/infra.git infra
 cd infra
 ./lost.sh start
 ```
