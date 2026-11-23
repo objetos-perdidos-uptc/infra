@@ -1,0 +1,266 @@
+name: lost-objects
+
+services:
+  # ============================================
+  # INFRAESTRUCTURA BASE
+  # ============================================
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: postgres-lost
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - lost-network
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:6
+    container_name: mongodb-lost
+    ports:
+      - "${MONGO_PORT}:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - lost-network
+    healthcheck:
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-lost
+    ports:
+      - "${REDIS_PORT}:6379"
+    networks:
+      - lost-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq-lost
+    ports:
+      - "${RABBITMQ_PORT}:5672"
+      - "${RABBITMQ_MGMT_PORT}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - lost-network
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================
+  # SERVICE REGISTRY
+  # ============================================
+  eureka:
+    build: ./eureka
+    container_name: eureka-lost
+    ports:
+      - "8761:8761"
+    networks:
+      - lost-network
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -q --spider http://localhost:8761/eureka/apps || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+
+  # ============================================
+  # API GATEWAY
+  # ============================================
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway-lost
+    environment:
+      EUREKA_URL: http://eureka:8761/eureka/
+      EUREKA_CLIENT_ENABLED: "true"
+      JWT_SECRET: ${JWT_SECRET}
+    ports:
+      - "8080:8080"
+    networks:
+      - lost-network
+    depends_on:
+      eureka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ============================================
+  # AUTH SERVICE (Java/Spring + Postgres)
+  # ============================================
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service-lost
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      EUREKA_URL: http://eureka:8761/eureka/
+      EUREKA_CLIENT_ENABLED: "true"
+    ports:
+      - "8081:8081"
+    networks:
+      - lost-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ============================================
+  # CLAIM SERVICE (Java/Spring + Mongo + Redis)
+  # ============================================
+  claim-service:
+    build: ./claim-service-legacy
+    container_name: claim-service-lost
+    environment:
+      # Spring Boot 4: prefijo spring.mongodb / spring.redis
+      SPRING_MONGODB_URI: mongodb://mongodb:27017/claims_db
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      # Compatibilidad con los placeholders de application.properties
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb:27017/claims_db
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      MONGO_HOST: mongodb
+      MONGO_PORT: 27017
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      EUREKA_URL: http://eureka:8761/eureka/
+    ports:
+      - "8085:8085"
+    networks:
+      - lost-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ============================================
+  # REPORT SERVICE (Node.js + Postgres propio + RabbitMQ)
+  # ============================================
+  report-service:
+    build: ./report-service
+    container_name: report-service-lost
+    environment:
+      APP_NAME: report-service
+      PORT: 8082
+      HOST_NAME: report-service
+      IP_ADDR: 0.0.0.0
+      EUREKA_URL: http://eureka:8761/eureka/
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: reports_db
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      UPLOAD_DIR: uploads
+      MAX_PHOTOS: 5
+      MAX_PHOTO_MB: 5
+      EXPIRATION_DAYS: 30
+      REMINDER_DAYS: 3
+      EXPIRATION_CRON: "0 2 * * *"
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      REPORTS_EXCHANGE: reports.events
+      CLAIMS_EXCHANGE: claims.events
+      CLAIMS_QUEUE: report-service.claim-events
+    ports:
+      - "8082:8082"
+    volumes:
+      - report_uploads:/app/uploads
+    networks:
+      - lost-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ============================================
+  # MATCHING SERVICE (Python/FastAPI + Redis + RabbitMQ)
+  # ============================================
+  matching-service:
+    build: ./matching-service
+    container_name: matching-service-lost
+    environment:
+      REDIS_URL: redis://redis:6379
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    ports:
+      - "8000:8000"
+    networks:
+      - lost-network
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ============================================
+  # NOTIFICATION SERVICE (Python worker + RabbitMQ + Brevo)
+  # ============================================
+  notification-service:
+    build: ./notification-service
+    container_name: notification-service-lost
+    environment:
+      AMQP_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      BREVO_API_KEY: ${BREVO_API_KEY}
+      TEST_EMAIL_DESTINATION: ${TEST_EMAIL_DESTINATION}
+    networks:
+      - lost-network
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  lost-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    name: lost-objects-postgres-data
+  mongo_data:
+    name: lost-objects-mongo-data
+  rabbitmq_data:
+    name: lost-objects-rabbitmq-data
+  report_uploads:
+    name: lost-objects-report-uploads

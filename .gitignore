@@ -1,0 +1,20 @@
+# Secretos
+.env
+*.env
+!.env.example
+
+# Logs e IDE
+*.log
+.idea/
+*.iml
+.vscode/
+
+# Repos clonados por lost.sh
+eureka/
+api-gateway/
+auth-service/
+claim-service-legacy/
+report-service/
+matching-service/
+notification-service/
+frontend/
