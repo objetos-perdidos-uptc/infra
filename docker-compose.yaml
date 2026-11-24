@@ -251,6 +251,33 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-lost
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - lost-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-lost
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - lost-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 networks:
   lost-network:
     driver: bridge
@@ -264,3 +291,7 @@ volumes:
     name: lost-objects-rabbitmq-data
   report_uploads:
     name: lost-objects-report-uploads
+  prometheus_data:
+    name: lost-objects-prometheus-data
+  grafana_data:
+    name: lost-objects-grafana-data

@@ -1,0 +1,41 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Java (requieren spring-boot-starter-actuator + micrometer-registry-prometheus)
+  - job_name: 'auth-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['auth-service:8081']
+
+  - job_name: 'claim-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['claim-service:8085']
+
+  - job_name: 'api-gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['api-gateway:8080']
+
+  # Node
+  - job_name: 'report-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['report-service:8082']
+
+  # Python
+  - job_name: 'matching-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['matching-service:8000']
+
+  - job_name: 'notification-service'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['notification-service:8001']
